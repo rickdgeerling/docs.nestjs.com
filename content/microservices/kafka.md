@@ -523,3 +523,30 @@ To do so, you can use `producer` and `consumer` getters exposed by the `ClientKa
 const producer = this.client.producer;
 const consumer = this.client.consumer;
 ```
+
+#### Handling non-retriable exceptions
+
+The underlying KafkaJS library gives a lot of freedom to handle exceptions on the consumer. By default, it will simply stop consuming messages when it encounters a non-retriable error, but we can easily configure NestJS to gracefully shutdown so the application can be restarted by an underlying runtime like Kubernetes.
+
+```typescript
+@@filename(main)
+const app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {
+  transport: Transport.KAFKA,
+  options: {
+    exitOnCrash: true
+  }
+});
+```
+
+If your application has different needs or manages additional resources that should be shutdown gracefully, you can instead attach an event handler on the consumer directly:
+
+```typescript
+import type { Kafka, Consumer, Producer } from 'kafkajs';
+
+const [client, consumer, producer] = app.unwrap<[Kafka, Consumer, Producer]>();
+consumer.on(consumer.events.CRASH, ({ error, groupId, restart }) => {
+  if (!restart) {
+    doGracefulShutdown();
+  }
+});
+```
